@@ -53,9 +53,9 @@ class WallFollow:
             self.steering_angle = 0.0
         else:
             self.steering_angle = self.compute_steering_angle(self.error, self.dt)
-        if abs(self.steering_angle) >= 0 and abs(self.steering_angle) < 0.174533:
+        if abs(self.steering_angle) >= 0 and abs(self.steering_angle) < 0.1:
             self.speed = 0.5
-        elif abs(self.steering_angle) >= 0.174533 and abs(self.steering_angle) < 0.349066:
+        elif abs(self.steering_angle) >= 0.1 and abs(self.steering_angle) < 0.2:
             self.speed = 0.5
         else:
             self.speed = 0.5
