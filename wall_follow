@@ -1,0 +1,71 @@
+#!/usr/bin/env python3
+
+import rospy
+from sensor_msgs.msg import LaserScan
+from ackermann_msgs.msg import AckermannDriveStamped, AckermannDrive
+import math
+
+class WallFollow:
+
+    def __init__(self):
+        rospy.init_node('wall_follow')
+        self.drive_pub = rospy.Publisher('drive', AckermannDriveStamped, queue_size=1)
+        self.scan_sub = rospy.Subscriber('/scan', LaserScan, self.scan_callback)
+        self.drive_msg = AckermannDriveStamped()
+        self.error = self.prev_error = 0.0
+        self.alpha = self.a = self.b = self.c = self.t = self.prev_t = self.dt = 0.0
+        self.index0 = 809
+        self.index_theta = 629
+        self.index_theta_comp = 270
+        self.desired_left = 1.0
+        self.theta = 1.0472
+        self.actual_dist = 0.0
+        self.kp = 0.1
+        self.ki = 0.1
+        self.kd = 0.1
+        self.L = 0.1
+        self.steering_angle = self.speed = self.integral_prev = self.integral = self.derivative = self.proportional = 0.0
+
+    def compute_actual_dist(self, a, b):
+        self.alpha = math.atan((a * math.cos(self.theta) - b) / (a * math.sin(self.theta)))
+        self.actual_dist = (b * math.cos(self.alpha)) + (self.L * math.sin(self.alpha))
+        return self.actual_dist
+
+    def compute_steering_angle(self, error, dt):
+        self.proportional = self.kp * error
+        self.integral = self.ki * (self.integral_prev + ((self.prev_error + error) / 2))
+        self.derivative = self.kd * ((error - self.prev_error))
+        self.steering_angle = -1.0 * (self.proportional + self.integral + self.derivative)
+        self.prev_error = error
+        self.integral_prev = self.integral
+        return self.steering_angle
+
+    def scan_callback(self, scan_msg):
+        self.b = scan_msg.ranges[self.index0]
+        self.a = scan_msg.ranges[self.index_theta]
+        self.c = scan_msg.ranges[self.index_theta_comp]
+        self.t = scan_msg.header.stamp.secs + (scan_msg.header.stamp.nsecs / 1000000000)
+        self.dt = self.t - self.prev_t
+        self.prev_t = self.t
+        self.actual_dist = self.compute_actual_dist(self.a, self.b)
+        self.error = self.desired_left - self.actual_dist
+        if (self.b + self.c >= 3.2 and self.b + self.c <= 3.6) and (self.a <= (self.b + 0.2)):
+            self.steering_angle = 0.0
+        else:
+            self.steering_angle = self.compute_steering_angle(self.error, self.dt)
+        if abs(self.steering_angle) >= 0 and abs(self.steering_angle) < 0.174533:
+            self.speed = 0.5
+        elif abs(self.steering_angle) >= 0.174533 and abs(self.steering_angle) < 0.349066:
+            self.speed = 0.5
+        else:
+            self.speed = 0.5
+        self.drive_msg.drive.steering_angle = self.steering_angle
+        self.drive_msg.drive.speed = self.speed
+        self.drive_pub.publish(self.drive_msg)
+
+if __name__ == '__main__':
+    try:
+        wf = WallFollow()
+        rospy.spin()
+    except rospy.ROSInterruptException:
+        pass
